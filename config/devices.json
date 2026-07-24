@@ -1,0 +1,9 @@
+{
+  "gpio_chip": "/dev/gpiochip0",
+  "devices": [
+    { "pin": 17, "name": "living_room_light", "component": "lighting" },
+    { "pin": 27, "name": "porch_light", "component": "lighting" },
+    { "pin": 22, "name": "garage_relay", "component": "relay" },
+    { "pin": 23, "name": "exhaust_fan", "component": "climate" }
+  ]
+}

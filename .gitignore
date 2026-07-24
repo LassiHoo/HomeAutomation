@@ -1,0 +1,30 @@
+# Build output
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.dylib
+*.exe
+
+# Runtime data produced by the hub itself
+/data/
+/logs/
+*.db
+*.db-wal
+*.db-shm
+*.log
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+.claude/

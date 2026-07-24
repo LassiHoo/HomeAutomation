@@ -1,0 +1,7 @@
+build/
+data/
+logs/
+*.db
+.git/
+.github/
+README.md
