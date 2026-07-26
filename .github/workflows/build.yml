@@ -15,7 +15,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential cmake libgpiod-dev libsqlite3-dev pkg-config
+            build-essential cmake libsqlite3-dev pkg-config \
+            git ca-certificates autoconf autoconf-archive automake libtool libtool-bin
+
+      # GitHub's ubuntu-latest runner (like Ubuntu 22.04/24.04 generally)
+      # only ships libgpiod v1 via apt; this project is written against the
+      # v2 C++ API, so it's built from source here too (same as the
+      # Dockerfile's builder stage — see its top-of-file comment for why).
+      - name: Build libgpiod v2 from source
+        run: |
+          git clone --branch v2.2.4 --depth 1 https://github.com/brgl/libgpiod.git /tmp/libgpiod
+          cd /tmp/libgpiod
+          ./autogen.sh --enable-bindings-cxx --prefix=/usr/local
+          make -j"$(nproc)"
+          sudo make install
+          sudo ldconfig
 
       - name: Configure
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
