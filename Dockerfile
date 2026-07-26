@@ -46,9 +46,11 @@ COPY src ./src
 COPY include ./include
 
 # FetchContent (spdlog/nlohmann-json/cpp-httplib) needs network access, which
-# is available at build time.
-RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-    && cmake --build build -j"$(nproc)"
+# is available at build time. Tests are built/run separately in CI (see
+# .github/workflows/build.yml) — skip them here so the image build doesn't
+# also fetch/compile GoogleTest under QEMU emulation.
+RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+    && cmake --build build --target hub -j"$(nproc)"
 
 # --- Runtime stage -----------------------------------------------------
 

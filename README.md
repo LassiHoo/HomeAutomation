@@ -34,6 +34,9 @@ spdlog ---> [console sink] [rotating file sink] [SqliteLogSink] ---> data/events
   console, rotating file, SQLite), creates a logger per component (`gpio`,
   `api_server`, `device_manager`), and starts the HTTP server.
 
+Everything except `main.cpp` builds into a `hub_core` static library, which
+both the `hub` executable and the [tests](tests/) link against.
+
 ### Design decisions
 
 - **libgpiod v2, not v1.** This project uses the modern character-device C++
@@ -83,6 +86,18 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j"$(nproc)"
 
 ./build/hub config/devices.json
+```
+
+### Running the tests
+
+Unit tests (GoogleTest, fetched automatically by CMake) cover `DeviceManager`
+config loading, `GpioController`'s graceful degradation when no GPIO chip is
+present, `SqliteLogSink`'s schema/WAL setup and inserts, and the `ApiServer`
+routes end-to-end against a live instance on a test port:
+
+```bash
+cmake --build build -j"$(nproc)"
+ctest --test-dir build --output-on-failure
 ```
 
 The binary reads its config path from `argv[1]` (default

@@ -47,17 +47,16 @@ pkg_check_modules(GPIOD REQUIRED IMPORTED_TARGET libgpiod libgpiodcxx)
 find_package(SQLite3 REQUIRED)
 find_package(Threads REQUIRED)
 
-add_executable(hub
-  src/main.cpp
+add_library(hub_core STATIC
   src/device_manager.cpp
   src/gpio_controller.cpp
   src/api_server.cpp
   src/sqlite_log_sink.cpp
 )
 
-target_include_directories(hub PRIVATE include)
+target_include_directories(hub_core PUBLIC include)
 
-target_link_libraries(hub PRIVATE
+target_link_libraries(hub_core PUBLIC
   spdlog::spdlog
   nlohmann_json::nlohmann_json
   httplib::httplib
@@ -66,4 +65,12 @@ target_link_libraries(hub PRIVATE
   Threads::Threads
 )
 
+add_executable(hub src/main.cpp)
+target_link_libraries(hub PRIVATE hub_core)
+
 install(TARGETS hub RUNTIME DESTINATION bin)
+
+include(CTest)
+if(BUILD_TESTING)
+  add_subdirectory(tests)
+endif()
