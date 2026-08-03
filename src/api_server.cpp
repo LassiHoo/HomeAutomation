@@ -14,9 +14,9 @@ constexpr int kDefaultEventLimit = 100;
 constexpr int kMaxEventLimit = 1000;
 }  // namespace
 
-ApiServer::ApiServer(DeviceManager& device_manager, GpioController& gpio,
+ApiServer::ApiServer(DeviceManager& device_manager, GpioController& gpio, Bme280Sensor& bme280,
                       const std::string& events_db_path)
-    : device_manager_(device_manager), gpio_(gpio) {
+    : device_manager_(device_manager), gpio_(gpio), bme280_(bme280) {
   if (sqlite3_open_v2(events_db_path.c_str(), &events_db_,
                        SQLITE_OPEN_READONLY | SQLITE_OPEN_FULLMUTEX,
                        nullptr) != SQLITE_OK) {
@@ -34,6 +34,9 @@ ApiServer::ApiServer(DeviceManager& device_manager, GpioController& gpio,
   });
   server_.Get("/events", [this](const httplib::Request& req, httplib::Response& res) {
     handle_events(req, res);
+  });
+  server_.Get("/sensors/bme280", [this](const httplib::Request& req, httplib::Response& res) {
+    handle_bme280(req, res);
   });
 }
 
@@ -154,6 +157,28 @@ void ApiServer::handle_events(const httplib::Request& req, httplib::Response& re
   json body;
   body["count"] = events.size();
   body["events"] = std::move(events);
+  res.set_content(body.dump(), "application/json");
+}
+
+void ApiServer::handle_bme280(const httplib::Request&, httplib::Response& res) {
+  json body;
+  body["available"] = bme280_.available();
+
+  auto reading = bme280_.read();
+  if (!reading.has_value()) {
+    body["temperature_c"] = nullptr;
+    body["humidity_percent"] = nullptr;
+    body["pressure_hpa"] = nullptr;
+    if (!bme280_.available()) {
+      res.status = 503;
+    }
+    res.set_content(body.dump(), "application/json");
+    return;
+  }
+
+  body["temperature_c"] = reading->temperature_c;
+  body["humidity_percent"] = reading->humidity_percent;
+  body["pressure_hpa"] = reading->pressure_hpa;
   res.set_content(body.dump(), "application/json");
 }
 

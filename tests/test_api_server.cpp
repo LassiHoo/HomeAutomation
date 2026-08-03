@@ -10,6 +10,7 @@
 #include <fstream>
 #include <thread>
 
+#include "bme280_sensor.h"
 #include "device_manager.h"
 #include "gpio_controller.h"
 #include "sqlite_log_sink.h"
@@ -54,6 +55,9 @@ class ApiServerTest : public ::testing::Test {
     // requiring real hardware for this test.
     gpio_ = std::make_unique<hub::GpioController>("/dev/nonexistent_chip_for_unit_tests",
                                                    device_manager_->devices());
+    // Same nonexistent-path pattern for the sensor: degrades gracefully.
+    bme280_ = std::make_unique<hub::Bme280Sensor>("/dev/nonexistent_i2c_bus_for_unit_tests",
+                                                   0x76);
 
     // Seed one event row so /events has something to return.
     {
@@ -63,7 +67,7 @@ class ApiServerTest : public ::testing::Test {
       sink->flush();
     }
 
-    server_ = std::make_unique<hub::ApiServer>(*device_manager_, *gpio_, db_path_);
+    server_ = std::make_unique<hub::ApiServer>(*device_manager_, *gpio_, *bme280_, db_path_);
     server_thread_ = std::thread([this]() { server_->listen("127.0.0.1", kTestPort); });
 
     client_ = std::make_unique<httplib::Client>("127.0.0.1", kTestPort);
@@ -90,6 +94,7 @@ class ApiServerTest : public ::testing::Test {
   std::string db_path_;
   std::unique_ptr<hub::DeviceManager> device_manager_;
   std::unique_ptr<hub::GpioController> gpio_;
+  std::unique_ptr<hub::Bme280Sensor> bme280_;
   std::unique_ptr<hub::ApiServer> server_;
   std::thread server_thread_;
   std::unique_ptr<httplib::Client> client_;
@@ -134,4 +139,14 @@ TEST_F(ApiServerTest, EventsComponentFilterExcludesNonMatches) {
 
   auto body = nlohmann::json::parse(res->body);
   EXPECT_EQ(body["count"].get<int>(), 0);
+}
+
+TEST_F(ApiServerTest, Bme280ReturnsServiceUnavailableWhenSensorMissing) {
+  auto res = client_->Get("/sensors/bme280");
+  ASSERT_TRUE(res);
+  EXPECT_EQ(res->status, 503);
+
+  auto body = nlohmann::json::parse(res->body);
+  EXPECT_EQ(body["available"], false);
+  EXPECT_TRUE(body["temperature_c"].is_null());
 }

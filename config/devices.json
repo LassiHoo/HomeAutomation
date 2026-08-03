@@ -5,5 +5,9 @@
     { "pin": 27, "name": "porch_light", "component": "lighting" },
     { "pin": 22, "name": "garage_relay", "component": "relay" },
     { "pin": 23, "name": "exhaust_fan", "component": "climate" }
-  ]
+  ],
+  "bme280": {
+    "i2c_bus": "/dev/i2c-1",
+    "address": "0x76"
+  }
 }

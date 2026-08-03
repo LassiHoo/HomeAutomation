@@ -14,6 +14,7 @@ include(GoogleTest)
 add_executable(hub_tests
   test_device_manager.cpp
   test_gpio_controller.cpp
+  test_bme280_sensor.cpp
   test_sqlite_log_sink.cpp
   test_api_server.cpp
 )

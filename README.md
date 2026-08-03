@@ -6,25 +6,35 @@ API, with structured logging that also lands in a queryable SQLite event log.
 ## Architecture
 
 ```
-config/devices.json  --->  DeviceManager  --->  GpioController  --->  libgpiod v2
-                                 |                     |
-                                 v                     v
-                             ApiServer  <---------------
-                                 |
-                                 v
-                          cpp-httplib REST API  (GET /status, POST /toggle/{pin}, GET /events)
+                       +-->  GpioController  --->  libgpiod v2
+config/devices.json ---+-->  Bme280Sensor    --->  I2C (/dev/i2c-1)
+     (DeviceManager)    \                                |
+                         \--------------+  ApiServer  <--+
+                                        |       |
+                                        v       v
+                          cpp-httplib REST API  (GET /status, POST /toggle/{pin},
+                                                  GET /events, GET /sensors/bme280)
 
 spdlog ---> [console sink] [rotating file sink] [SqliteLogSink] ---> data/events.db (events table)
 ```
 
 - **`device_manager`** loads `config/devices.json` (a pin → name → component
-  mapping) and answers lookups for the other components.
+  mapping, plus the BME280's I2C bus/address) and answers lookups for the
+  other components.
 - **`gpio_controller`** wraps libgpiod v2's C++ bindings (`gpiod::chip`,
   `gpiod::line_request`). It requests every configured pin as an output line
   at startup. If the GPIO chip can't be opened (e.g. you're not running on a
   Pi), it disables itself gracefully instead of crashing — `/status` and
   `/toggle` still respond, just reporting GPIO as unavailable.
-- **`api_server`** is a `cpp-httplib` server exposing three routes (see
+- **`bme280_sensor`** talks to a BME280 temperature/humidity/pressure sensor
+  over I2C using raw Linux `i2c-dev` ioctls (`I2C_RDWR`) — no `libi2c`/smbus
+  dependency. The Bosch datasheet compensation math is a separate `static`
+  function (`Bme280Sensor::compensate`) taking calibration coefficients and
+  raw ADC values, kept independent of the hardware I/O so it's unit-testable
+  without real hardware. Same graceful-degradation philosophy as
+  `gpio_controller`: if the bus or sensor isn't present, it disables itself
+  instead of crashing.
+- **`api_server`** is a `cpp-httplib` server exposing four routes (see
   below). It reads the event log via its own read-only SQLite connection.
 - **`sqlite_log_sink`** is a custom spdlog sink (`spdlog::sinks::base_sink`)
   that writes every log record into an `events` table via a prepared
@@ -54,7 +64,14 @@ both the `hub` executable and the [tests](tests/) link against.
 - **The runtime container runs as root.** GPIO passthrough containers
   generally need this since `/dev/gpiochip0` on Raspberry Pi OS is owned by
   `root` (or `root:gpio`), and there's no reliable way to map the host's
-  `gpio` group into the container.
+  `gpio` group into the container. The same reasoning applies to `/dev/i2c-1`
+  for the BME280.
+- **BME280 over raw `i2c-dev` ioctls, not `libi2c-dev`.** Register reads use
+  `ioctl(fd, I2C_RDWR, ...)` with two `i2c_msg`s (write register address, read
+  N bytes) to get a proper repeated-start transaction, using only Linux
+  kernel headers (`linux/i2c.h`, `linux/i2c-dev.h`) already present via
+  `linux-libc-dev`. This avoids adding a system library dependency for what's
+  otherwise a couple dozen lines of ioctl calls.
 
 ## REST API
 
@@ -63,6 +80,7 @@ both the `hub` executable and the [tests](tests/) link against.
 | `/status` | GET | Service + GPIO health, and the current state of every configured device |
 | `/toggle/{pin}` | POST | Flips the output line for `pin`; 404 if unconfigured, 503 if GPIO unavailable |
 | `/events?level=&component=&limit=` | GET | Queries the SQLite event log; all params optional (default limit 100, max 1000) |
+| `/sensors/bme280` | GET | Current temperature (°C), humidity (%RH), and pressure (hPa); 503 if the sensor is unavailable |
 
 Example:
 
@@ -70,6 +88,7 @@ Example:
 curl localhost:8080/status
 curl -X POST localhost:8080/toggle/17
 curl "localhost:8080/events?component=gpio&level=info&limit=20"
+curl localhost:8080/sensors/bme280
 ```
 
 ## Building locally
@@ -125,10 +144,15 @@ linux/arm64 ...` even on an x86 dev machine.
 ## Deploying
 
 `docker-compose.yml` runs the image with `restart: unless-stopped`, exposes
-port 8080, passes through `/dev/gpiochip0`, and persists SQLite data + logs
-in named volumes. Replace the placeholder `ghcr.io/OWNER/home-automation-hub`
-image reference with your actual GitHub owner/repo (lowercase) before using
-it standalone.
+port 8080, passes through `/dev/gpiochip0` and `/dev/i2c-1`, and persists
+SQLite data + logs in named volumes. Replace the placeholder
+`ghcr.io/OWNER/home-automation-hub` image reference with your actual GitHub
+owner/repo (lowercase) before using it standalone.
+
+If your BME280 is wired to a different I2C bus or address, edit the
+`bme280` section of `config/devices.json` accordingly — enable the I2C
+interface itself with `sudo raspi-config` (Interface Options → I2C) on the
+Pi if you haven't already.
 
 ```bash
 docker compose up -d

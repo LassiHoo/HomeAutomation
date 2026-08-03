@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "api_server.h"
+#include "bme280_sensor.h"
 #include "device_manager.h"
 #include "gpio_controller.h"
 #include "sqlite_log_sink.h"
@@ -64,19 +65,22 @@ int main(int argc, char** argv) {
   auto sinks = build_sinks(log_dir, events_db_path);
   make_component_logger("device_manager", sinks);
   make_component_logger("gpio", sinks);
+  make_component_logger("bme280", sinks);
   auto api_logger = make_component_logger("api_server", sinks);
   spdlog::set_default_logger(api_logger);
 
   try {
     hub::DeviceManager device_manager(config_path);
     hub::GpioController gpio(device_manager.gpio_chip_path(), device_manager.devices());
-    hub::ApiServer server(device_manager, gpio, events_db_path);
+    hub::Bme280Sensor bme280(device_manager.bme280_i2c_bus(), device_manager.bme280_address());
+    hub::ApiServer server(device_manager, gpio, bme280, events_db_path);
 
     g_server = &server;
     std::signal(SIGINT, handle_signal);
     std::signal(SIGTERM, handle_signal);
 
-    api_logger->info("home automation hub starting up (gpio_available={})", gpio.available());
+    api_logger->info("home automation hub starting up (gpio_available={}, bme280_available={})",
+                      gpio.available(), bme280.available());
     server.listen(host, port);
     api_logger->info("home automation hub shut down cleanly");
   } catch (const std::exception& e) {

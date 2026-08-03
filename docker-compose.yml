@@ -8,6 +8,7 @@ services:
       - "8080:8080"
     devices:
       - "/dev/gpiochip0:/dev/gpiochip0"
+      - "/dev/i2c-1:/dev/i2c-1"
     volumes:
       - hub_data:/app/data
       - hub_logs:/app/logs

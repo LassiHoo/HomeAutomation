@@ -29,9 +29,16 @@ DeviceManager::DeviceManager(const std::string& config_path) {
     devices_.push_back(std::move(device));
   }
 
+  if (j.contains("bme280")) {
+    const auto& bme280 = j.at("bme280");
+    bme280_i2c_bus_ = bme280.value("i2c_bus", bme280_i2c_bus_);
+    bme280_address_ =
+        static_cast<uint8_t>(std::stoi(bme280.value("address", std::string("0x76")), nullptr, 16));
+  }
+
   if (logger) {
-    logger->info("loaded {} device(s) from {} (chip {})", devices_.size(),
-                  config_path, gpio_chip_path_);
+    logger->info("loaded {} device(s) from {} (chip {}, bme280 {} @ 0x{:02x})", devices_.size(),
+                  config_path, gpio_chip_path_, bme280_i2c_bus_, bme280_address_);
   }
 }
 

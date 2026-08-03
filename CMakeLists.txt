@@ -50,6 +50,7 @@ find_package(Threads REQUIRED)
 add_library(hub_core STATIC
   src/device_manager.cpp
   src/gpio_controller.cpp
+  src/bme280_sensor.cpp
   src/api_server.cpp
   src/sqlite_log_sink.cpp
 )
